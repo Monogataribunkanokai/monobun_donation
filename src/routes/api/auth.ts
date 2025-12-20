@@ -8,10 +8,13 @@ import {
   requestPasswordReset,
   resetPassword,
   createSession,
+  isCaptchaRequired,
 } from "../../lib/auth";
 import { findAdminById } from "../../lib/db";
 import { logger } from "../../lib/logger";
 import { auditLogin, auditPasswordChange, AuditActions, recordAudit } from "../../lib/audit";
+import { sendPasswordResetEmail } from "../../lib/mail";
+import { verifyCaptcha, isCaptchaConfigured } from "../../lib/captcha";
 import {
   LoginSchema,
   PasswordChangeSchema,
@@ -55,8 +58,41 @@ export async function handleLogin(ctx: RouteContext): Promise<Response> {
       );
     }
 
-    const { email, password } = validation.data;
-    const result = await login(email, password, clientIp, userAgent);
+    const { email, password, captchaToken } = validation.data;
+
+    // Check if CAPTCHA verification is needed
+    let captchaVerified = false;
+    const needsCaptcha = await isCaptchaRequired(email);
+
+    if (needsCaptcha) {
+      if (!captchaToken) {
+        // CAPTCHA required but no token provided
+        return Response.json(
+          {
+            error: "CAPTCHA_REQUIRED",
+            message: "Too many failed attempts. Please complete CAPTCHA.",
+            requireCaptcha: true,
+          },
+          { status: 400 }
+        );
+      }
+
+      // Verify CAPTCHA token
+      const captchaResult = await verifyCaptcha(captchaToken, clientIp);
+      if (!captchaResult.success) {
+        return Response.json(
+          {
+            error: "CAPTCHA_FAILED",
+            message: captchaResult.error || "CAPTCHA verification failed",
+            requireCaptcha: true,
+          },
+          { status: 400 }
+        );
+      }
+      captchaVerified = true;
+    }
+
+    const result = await login(email, password, clientIp, userAgent, captchaVerified);
 
     // Audit log
     await auditLogin(
@@ -374,12 +410,16 @@ export async function handleForgotPassword(ctx: RouteContext): Promise<Response>
     const result = await requestPasswordReset(email, clientIp);
 
     if (result) {
-      // TODO: Send email with reset link
-      // The token should be sent via email, not in the response
-      logger.info("Password reset requested", {
-        email,
-        token: result.token, // In production, this would be sent via email
-      });
+      // Send password reset email
+      const emailResult = await sendPasswordResetEmail(email, result.token);
+      if (!emailResult.success) {
+        logger.error("Failed to send password reset email", {
+          email,
+          error: emailResult.error,
+        });
+      } else {
+        logger.info("Password reset email sent", { email });
+      }
     }
 
     // Audit log (even if email not found, to track enumeration attempts)

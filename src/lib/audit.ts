@@ -76,6 +76,7 @@ export const AuditActions = {
   DONATION_CREATE: "donation.create",
   DONATION_COMPLETE: "donation.complete",
   DONATION_FAIL: "donation.fail",
+  DONATION_REFUND: "donation.refund",
 
   // Subscriptions
   SUBSCRIPTION_CREATE: "subscription.create",

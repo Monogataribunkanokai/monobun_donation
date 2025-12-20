@@ -27,6 +27,7 @@ import {
 } from "./routes/api/subscriptions";
 import { handleStripeWebhook } from "./routes/api/webhooks";
 import { handleListEvents, handleGetEvent } from "./routes/api/events";
+import { handleAdminRoute } from "./routes/api/admin";
 
 const PORT = parseInt(process.env.PORT || "3000", 10);
 const IS_PRODUCTION = process.env.NODE_ENV === "production";
@@ -140,10 +141,11 @@ async function handleRequest(request: Request, server: any): Promise<Response> {
         if (!authResult.success) {
           response = authResult.response;
         } else {
-          // TODO: Implement admin routes (donations, events, subscriptions, settings, stats)
-          response = Response.json(
-            { error: "NOT_IMPLEMENTED", message: "This endpoint is not yet implemented" },
-            { status: 501 }
+          // Route to admin handlers
+          response = await handleAdminRoute(
+            { request, directIp, admin: authResult.admin, session: authResult.session },
+            path,
+            method
           );
         }
       }
@@ -185,6 +187,34 @@ async function handleRequest(request: Request, server: any): Promise<Response> {
         requestId,
       });
       return addRequestId(response);
+    }
+
+    // Static files - Admin panel
+    else if (path.startsWith("/admin") && method === "GET") {
+      const filePath = path === "/admin" || path === "/admin/"
+        ? "./public/admin/index.html"
+        : `./public${path}`;
+      const file = Bun.file(filePath);
+      if (await file.exists()) {
+        response = new Response(file);
+      } else {
+        // For client-side routing, return index.html
+        response = new Response(Bun.file("./public/admin/index.html"));
+      }
+    }
+
+    // Static files - Donate page
+    else if ((path.startsWith("/donate") || path === "/") && method === "GET") {
+      const filePath = path === "/" || path === "/donate" || path === "/donate/"
+        ? "./public/donate/index.html"
+        : `./public${path}`;
+      const file = Bun.file(filePath);
+      if (await file.exists()) {
+        response = new Response(file);
+      } else {
+        // For client-side routing, return index.html
+        response = new Response(Bun.file("./public/donate/index.html"));
+      }
     }
 
     // 404 for unknown routes

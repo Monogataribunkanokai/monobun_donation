@@ -10,11 +10,23 @@ import {
   findWebhookEvent,
   createWebhookEvent,
   findDonationByStripeSession,
+  findDonationByPaymentIntent,
   updateDonationStatus,
   findSubscriptionById,
+  findSubscriptionByStripeId,
+  updateSubscriptionStripeIds,
+  updateSubscriptionStatusByStripeId,
+  markDonationDisputed,
+  findEventById,
 } from "../../lib/db";
 import { logger } from "../../lib/logger";
 import { getClientIP } from "../../middleware/ip-filter";
+import {
+  sendDonationConfirmationEmail,
+  sendSubscriptionConfirmationEmail,
+  sendPaymentFailureEmail,
+  sendSubscriptionCancelledEmail,
+} from "../../lib/mail";
 
 interface RouteContext {
   request: Request;
@@ -134,33 +146,68 @@ async function handleCheckoutSessionCompleted(
   const sessionId = session.id as string;
   const mode = session.mode as string;
   const paymentIntent = session.payment_intent as string | undefined;
-  const subscriptionId = session.subscription as string | undefined;
+  const stripeSubscriptionId = session.subscription as string | undefined;
   const metadata = session.metadata as Record<string, string> | undefined;
+  const customerEmail = session.customer_email as string | undefined;
 
   logger.info("Checkout session completed", {
     sessionId,
     mode,
     paymentIntent,
-    subscriptionId,
+    stripeSubscriptionId,
   });
 
   if (mode === "payment") {
-    // One-time donation
+    // One-time or event donation
     const donation = await findDonationByStripeSession(sessionId);
     if (donation) {
       await updateDonationStatus(donation.id, "completed", paymentIntent);
       logger.info("Donation marked as completed", { donationId: donation.id });
+
+      // Send confirmation email
+      if (donation.donor_email) {
+        let eventName: string | undefined;
+        if (donation.event_id) {
+          const event = await findEventById(donation.event_id);
+          eventName = event?.name;
+        }
+
+        await sendDonationConfirmationEmail(
+          donation.donor_email,
+          donation.donor_name || "サポーター",
+          donation.amount,
+          donation.id,
+          eventName
+        );
+      }
     } else {
       logger.warn("Donation not found for session", { sessionId });
     }
   } else if (mode === "subscription") {
-    // Subscription - will be handled by subscription.created event
+    // Subscription checkout - update with Stripe IDs
     const internalSubId = metadata?.subscription_id;
-    if (internalSubId) {
-      logger.info("Subscription checkout completed", {
-        internalId: internalSubId,
-        stripeSubscriptionId: subscriptionId,
-      });
+    if (internalSubId && stripeSubscriptionId) {
+      const subscription = await findSubscriptionById(internalSubId);
+      if (subscription) {
+        const customerId = session.customer as string;
+        await updateSubscriptionStripeIds(internalSubId, stripeSubscriptionId, customerId);
+        logger.info("Subscription Stripe IDs updated", {
+          internalId: internalSubId,
+          stripeSubscriptionId,
+        });
+
+        // Send confirmation email
+        if (subscription.donor_email) {
+          await sendSubscriptionConfirmationEmail(
+            subscription.donor_email,
+            subscription.donor_name || "サポーター",
+            subscription.amount,
+            subscription.type as "monthly" | "yearly",
+            subscription.id,
+            subscription.cancel_token
+          );
+        }
+      }
     }
   }
 }
@@ -199,38 +246,73 @@ async function handleSubscriptionCreated(
     status,
   });
 
-  // Update our subscription record with Stripe IDs
-  // Note: This would need a proper update function in db.ts
-  // For now, log the event
+  // Update our subscription record with Stripe IDs (may already be done in checkout.session.completed)
+  await updateSubscriptionStripeIds(internalSubId, stripeSubId, customerId);
 }
 
 async function handleSubscriptionUpdated(
   subscription: Record<string, unknown>
 ): Promise<void> {
   const stripeSubId = subscription.id as string;
-  const status = subscription.status as string;
+  const stripeStatus = subscription.status as string;
   const cancelAtPeriodEnd = subscription.cancel_at_period_end as boolean;
   const currentPeriodEnd = subscription.current_period_end as number;
 
   logger.info("Subscription updated", {
     stripeSubId,
-    status,
+    status: stripeStatus,
     cancelAtPeriodEnd,
     currentPeriodEnd: new Date(currentPeriodEnd * 1000).toISOString(),
   });
 
-  // Update subscription status in our database
-  // Status can be: incomplete, incomplete_expired, trialing, active, past_due, canceled, unpaid
+  // Map Stripe status to our status
+  // Stripe statuses: incomplete, incomplete_expired, trialing, active, past_due, canceled, unpaid, paused
+  let ourStatus: "active" | "cancelled" | "past_due" | "paused";
+  switch (stripeStatus) {
+    case "active":
+    case "trialing":
+      ourStatus = "active";
+      break;
+    case "past_due":
+    case "unpaid":
+      ourStatus = "past_due";
+      break;
+    case "canceled":
+    case "incomplete_expired":
+      ourStatus = "cancelled";
+      break;
+    case "paused":
+      ourStatus = "paused";
+      break;
+    default:
+      // incomplete - still pending, don't update
+      return;
+  }
+
+  await updateSubscriptionStatusByStripeId(stripeSubId, ourStatus);
 }
 
 async function handleSubscriptionDeleted(
   subscription: Record<string, unknown>
 ): Promise<void> {
   const stripeSubId = subscription.id as string;
+  const currentPeriodEnd = subscription.current_period_end as number;
 
   logger.info("Subscription deleted", { stripeSubId });
 
   // Mark subscription as cancelled in our database
+  await updateSubscriptionStatusByStripeId(stripeSubId, "cancelled");
+
+  // Send cancellation confirmation email
+  const sub = await findSubscriptionByStripeId(stripeSubId);
+  if (sub && sub.donor_email) {
+    const endDate = new Date(currentPeriodEnd * 1000);
+    await sendSubscriptionCancelledEmail(
+      sub.donor_email,
+      sub.donor_name || "サポーター",
+      endDate
+    );
+  }
 }
 
 async function handleInvoicePaid(
@@ -256,19 +338,31 @@ async function handleInvoicePaymentFailed(
   invoice: Record<string, unknown>
 ): Promise<void> {
   const invoiceId = invoice.id as string;
-  const subscriptionId = invoice.subscription as string | undefined;
+  const stripeSubscriptionId = invoice.subscription as string | undefined;
   const customerEmail = invoice.customer_email as string | undefined;
   const attemptCount = invoice.attempt_count as number;
 
   logger.warn("Invoice payment failed", {
     invoiceId,
-    subscriptionId,
+    stripeSubscriptionId,
     customerEmail,
     attemptCount,
   });
 
-  // Send payment failure notification to customer
-  // Consider pausing or cancelling subscription after X failures
+  // Update subscription status to past_due
+  if (stripeSubscriptionId) {
+    await updateSubscriptionStatusByStripeId(stripeSubscriptionId, "past_due");
+
+    // Send payment failure notification to customer
+    const sub = await findSubscriptionByStripeId(stripeSubscriptionId);
+    if (sub && sub.donor_email) {
+      await sendPaymentFailureEmail(
+        sub.donor_email,
+        sub.donor_name || "サポーター",
+        sub.id
+      );
+    }
+  }
 }
 
 async function handleDisputeCreated(
@@ -287,6 +381,17 @@ async function handleDisputeCreated(
   });
 
   // Mark donation as disputed
-  // Alert admin
-  // This is a serious event that needs attention
+  if (paymentIntentId) {
+    const donation = await findDonationByPaymentIntent(paymentIntentId);
+    if (donation) {
+      await markDonationDisputed(donation.id);
+      logger.security("Donation marked as disputed", {
+        donationId: donation.id,
+        disputeId,
+        reason,
+      });
+    }
+  }
+
+  // This is a serious event - admin should be notified via logging/monitoring
 }

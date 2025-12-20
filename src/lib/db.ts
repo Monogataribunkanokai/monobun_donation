@@ -368,6 +368,71 @@ export async function findSubscriptionByCancelToken(token: string): Promise<Subs
   return rows[0] as Subscription | null;
 }
 
+export async function findSubscriptionByStripeId(stripeSubscriptionId: string): Promise<Subscription | null> {
+  const db = getDb();
+  const rows = await db`
+    SELECT * FROM subscriptions WHERE stripe_subscription_id = ${stripeSubscriptionId} LIMIT 1
+  `;
+  return rows[0] as Subscription | null;
+}
+
+export async function updateSubscriptionStripeIds(
+  id: string,
+  stripeSubscriptionId: string,
+  stripeCustomerId: string
+): Promise<void> {
+  const db = getDb();
+  await db`
+    UPDATE subscriptions
+    SET stripe_subscription_id = ${stripeSubscriptionId},
+        stripe_customer_id = ${stripeCustomerId}
+    WHERE id = ${id}
+  `;
+}
+
+export async function updateSubscriptionStatus(
+  id: string,
+  status: "active" | "cancelled" | "past_due" | "paused"
+): Promise<void> {
+  const db = getDb();
+  await db`
+    UPDATE subscriptions
+    SET status = ${status},
+        cancelled_at = ${status === "cancelled" ? new Date() : null}
+    WHERE id = ${id}
+  `;
+}
+
+export async function updateSubscriptionStatusByStripeId(
+  stripeSubscriptionId: string,
+  status: "active" | "cancelled" | "past_due" | "paused"
+): Promise<void> {
+  const db = getDb();
+  await db`
+    UPDATE subscriptions
+    SET status = ${status},
+        cancelled_at = ${status === "cancelled" ? new Date() : null}
+    WHERE stripe_subscription_id = ${stripeSubscriptionId}
+  `;
+}
+
+export async function markDonationDisputed(donationId: string): Promise<void> {
+  const db = getDb();
+  await db`
+    UPDATE donations
+    SET status = 'disputed'
+    WHERE id = ${donationId}
+  `;
+}
+
+export async function findDonationByPaymentIntent(paymentIntentId: string): Promise<Donation | null> {
+  const db = getDb();
+  const rows = await db`
+    SELECT * FROM donations WHERE stripe_payment_intent_id = ${paymentIntentId} LIMIT 1
+  `;
+  return rows[0] as Donation | null;
+}
+
 // === Audit Log Operations ===
 
 export async function createAuditLog(log: Omit<AuditLog, "id" | "created_at">): Promise<AuditLog> {

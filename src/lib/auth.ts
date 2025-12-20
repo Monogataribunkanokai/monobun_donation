@@ -30,6 +30,17 @@ const CAPTCHA_THRESHOLD = 3;
 const GLOBAL_FAILURE_THRESHOLD = 100;
 const GLOBAL_DELAY_MS = 5000;
 
+// === CAPTCHA Check ===
+
+/**
+ * Check if CAPTCHA is required for a given email
+ */
+export async function isCaptchaRequired(email: string): Promise<boolean> {
+  const admin = await findAdminByEmail(email);
+  if (!admin) return false;
+  return admin.failed_login_attempts >= CAPTCHA_THRESHOLD;
+}
+
 // === Password Hashing (Argon2id via Bun) ===
 
 export async function hashPassword(password: string): Promise<string> {
@@ -173,7 +184,8 @@ export async function login(
   email: string,
   password: string,
   ipAddress: string | null,
-  userAgent: string | null
+  userAgent: string | null,
+  captchaVerified: boolean = false
 ): Promise<LoginResult> {
   // Check global failure rate (distributed attack prevention)
   const globalFailures = await getGlobalLoginFailureCount();
@@ -200,10 +212,14 @@ export async function login(
     };
   }
 
-  // Check if CAPTCHA required
-  if (admin.failed_login_attempts >= CAPTCHA_THRESHOLD) {
-    // In a real implementation, verify CAPTCHA token here
-    // For now, just flag that CAPTCHA is required
+  // Check if CAPTCHA required but not verified
+  if (admin.failed_login_attempts >= CAPTCHA_THRESHOLD && !captchaVerified) {
+    // CAPTCHA is required for this account but not yet verified
+    return {
+      success: false,
+      requireCaptcha: true,
+      reason: "CAPTCHA verification required",
+    };
   }
 
   // Verify password

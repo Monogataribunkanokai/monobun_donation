@@ -23,7 +23,7 @@ import {
   isValidIdempotencyKey,
 } from "../../lib/idempotency";
 import { getClientIP } from "../../middleware/ip-filter";
-import type { Donation, DonationType } from "../../types";
+import type { Donation } from "../../types";
 
 interface RouteContext {
   request: Request;
@@ -58,6 +58,17 @@ export async function handleCreateDonation(ctx: RouteContext): Promise<Response>
     }
 
     const { type, amount, paymentMethod, eventId, donor, message } = validation.data;
+
+    // Reject subscription types - they should use /api/subscriptions
+    if (type === "monthly" || type === "yearly") {
+      return Response.json(
+        {
+          error: "INVALID_TYPE",
+          message: "Monthly and yearly donations should use /api/subscriptions endpoint"
+        },
+        { status: 400 }
+      );
+    }
 
     // Validate event exists if eventId is provided
     if (eventId) {
@@ -107,16 +118,10 @@ export async function handleCreateDonation(ctx: RouteContext): Promise<Response>
         idempotencyKey,
       });
 
-      // Determine donation type
-      let donationType: DonationType = type;
-      if (type === "monthly" || type === "yearly") {
-        donationType = "one-time"; // Subscriptions are handled separately
-      }
-
       // Save donation to database
       const donation = await createDonation({
         id: donationId,
-        type: donationType,
+        type, // "one-time" or "event"
         event_id: eventId ?? null,
         amount,
         donor_email: donor.email,
@@ -131,7 +136,7 @@ export async function handleCreateDonation(ctx: RouteContext): Promise<Response>
       logger.info("Donation created", {
         donationId,
         amount,
-        type: donationType,
+        type,
         eventId,
       });
 
