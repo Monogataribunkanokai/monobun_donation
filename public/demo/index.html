@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Monobun Donation - Demo</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 40px 20px;
+    }
+
+    .container {
+      max-width: 800px;
+      text-align: center;
+    }
+
+    h1 {
+      color: white;
+      font-size: 3rem;
+      margin-bottom: 16px;
+      text-shadow: 0 2px 10px rgba(0,0,0,0.2);
+    }
+
+    .subtitle {
+      color: rgba(255,255,255,0.9);
+      font-size: 1.25rem;
+      margin-bottom: 48px;
+    }
+
+    .demo-cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 24px;
+      margin-bottom: 48px;
+    }
+
+    .demo-card {
+      background: white;
+      border-radius: 16px;
+      padding: 32px;
+      text-decoration: none;
+      color: inherit;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+    .demo-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 12px 40px rgba(0,0,0,0.2);
+    }
+
+    .demo-card .icon {
+      font-size: 3rem;
+      margin-bottom: 16px;
+    }
+
+    .demo-card h2 {
+      font-size: 1.5rem;
+      color: #333;
+      margin-bottom: 12px;
+    }
+
+    .demo-card p {
+      color: #666;
+      line-height: 1.6;
+    }
+
+    .features {
+      background: rgba(255,255,255,0.1);
+      border-radius: 12px;
+      padding: 32px;
+      color: white;
+    }
+
+    .features h3 {
+      font-size: 1.5rem;
+      margin-bottom: 24px;
+    }
+
+    .feature-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      text-align: left;
+    }
+
+    .feature-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .feature-item .check {
+      color: #ffd700;
+      font-size: 1.25rem;
+    }
+
+    .footer {
+      margin-top: 48px;
+      color: rgba(255,255,255,0.7);
+      font-size: 0.9rem;
+    }
+
+    .footer a {
+      color: #ffd700;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Monobun Donation</h1>
+    <p class="subtitle">Bunで構築された高速・セキュアな寄付システム</p>
+
+    <div class="demo-cards">
+      <a href="admin.html" class="demo-card">
+        <div class="icon">📊</div>
+        <h2>管理画面デモ</h2>
+        <p>寄付管理、定期支援、イベント管理などの管理機能を体験できます。モックデータで動作確認可能です。</p>
+      </a>
+
+      <a href="embed.html" class="demo-card">
+        <div class="icon">🔗</div>
+        <h2>埋め込みウィジェット</h2>
+        <p>外部サイトに寄付ウィジェットを埋め込んだ場合のイメージです。プログレスバーや金額選択UIを確認できます。</p>
+      </a>
+    </div>
+
+    <div class="features">
+      <h3>システムの特徴</h3>
+      <div class="feature-grid">
+        <div class="feature-item">
+          <span class="check">✓</span>
+          <span>Stripe決済対応</span>
+        </div>
+        <div class="feature-item">
+          <span class="check">✓</span>
+          <span>月額/年額サポーター</span>
+        </div>
+        <div class="feature-item">
+          <span class="check">✓</span>
+          <span>イベント別寄付</span>
+        </div>
+        <div class="feature-item">
+          <span class="check">✓</span>
+          <span>管理者ダッシュボード</span>
+        </div>
+        <div class="feature-item">
+          <span class="check">✓</span>
+          <span>レート制限</span>
+        </div>
+        <div class="feature-item">
+          <span class="check">✓</span>
+          <span>CAPTCHA対応</span>
+        </div>
+        <div class="feature-item">
+          <span class="check">✓</span>
+          <span>IPホワイトリスト</span>
+        </div>
+        <div class="feature-item">
+          <span class="check">✓</span>
+          <span>Docker対応</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer">
+      <p>Built with <a href="https://bun.sh" target="_blank">Bun</a> + React + PostgreSQL + Stripe</p>
+    </div>
+  </div>
+</body>
+</html>
