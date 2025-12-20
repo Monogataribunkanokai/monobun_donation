@@ -151,12 +151,193 @@ interface PriceOption {
 
 ## セキュリティ
 
-- HTTPS必須
-- CSRFトークン
-- XSS対策
-- SQLインジェクション対策（Bun.sqlパラメータ化）
-- iframe: X-Frame-Options設定（許可ドメイン指定）
-- 管理画面: IP制限 + セッション有効期限
+### 認証・セッション管理
+
+```typescript
+// パスワードハッシュ: Argon2id (Bunネイティブ)
+const hash = await Bun.password.hash(password, {
+  algorithm: "argon2id",
+  memoryCost: 65536,  // 64MB
+  timeCost: 3,
+});
+
+// セッショントークン: 暗号論的に安全な生成
+const token = crypto.randomBytes(32).toString("hex");
+
+// セッション有効期限
+const SESSION_MAX_AGE = 24 * 60 * 60 * 1000;  // 24時間
+const SESSION_IDLE_TIMEOUT = 30 * 60 * 1000;  // 30分無操作でログアウト
+```
+
+### CSRF対策
+
+```typescript
+// 1. SameSite Cookie
+Set-Cookie: session=xxx; HttpOnly; Secure; SameSite=Strict; Path=/
+
+// 2. 状態変更リクエストにCSRFトークン必須
+// フロントエンド
+headers: { "X-CSRF-Token": csrfToken }
+
+// バックエンド検証
+if (request.headers.get("X-CSRF-Token") !== session.csrfToken) {
+  return new Response("CSRF token mismatch", { status: 403 });
+}
+```
+
+### Rate Limiting
+
+```typescript
+const rateLimits = {
+  // 認証系: 厳しく制限
+  "POST /api/auth/login": { window: "15m", max: 5 },
+  "POST /api/auth/logout": { window: "1m", max: 10 },
+
+  // 公開API: 中程度
+  "POST /api/donations": { window: "1m", max: 10 },
+  "POST /api/subscriptions": { window: "1m", max: 5 },
+  "GET /api/events": { window: "1m", max: 60 },
+
+  // 管理API: 緩め
+  "* /api/admin/*": { window: "1m", max: 120 },
+};
+```
+
+### 二重決済防止
+
+```typescript
+// Stripe Idempotency Key使用
+const session = await stripe.checkout.sessions.create({
+  // ...
+}, {
+  idempotencyKey: `donation_${crypto.randomUUID()}`,
+});
+
+// DB側ユニーク制約
+CREATE UNIQUE INDEX idx_donations_idempotency
+ON donations(stripe_session_id) WHERE stripe_session_id IS NOT NULL;
+```
+
+### Webhook署名検証
+
+```typescript
+// Stripe Webhook必須検証
+const sig = request.headers.get("stripe-signature");
+let event: Stripe.Event;
+
+try {
+  event = stripe.webhooks.constructEvent(
+    await request.text(),
+    sig!,
+    process.env.STRIPE_WEBHOOK_SECRET!
+  );
+} catch (err) {
+  console.error("Webhook signature verification failed");
+  return new Response("Invalid signature", { status: 400 });
+}
+
+// 再送攻撃防止: イベントID重複チェック
+const exists = await db.query(
+  "SELECT 1 FROM webhook_events WHERE stripe_event_id = $1",
+  [event.id]
+);
+if (exists.rows.length > 0) {
+  return new Response("Already processed", { status: 200 });
+}
+```
+
+### 入力バリデーション (Zod)
+
+```typescript
+import { z } from "zod";
+
+const DonationSchema = z.object({
+  type: z.enum(["one-time", "monthly", "yearly", "event"]),
+  amount: z.number().int().min(100).max(10_000_000),
+  eventId: z.string().regex(/^[a-z0-9-]+$/).max(100).optional(),
+  donor: z.object({
+    email: z.string().email().max(255),
+    name: z.string().max(100).optional(),
+  }),
+  message: z.string().max(1000).optional(),
+});
+```
+
+### IP制限（プロキシ対応）
+
+```typescript
+const TRUSTED_PROXIES = ["10.0.0.0/8", "172.16.0.0/12", "127.0.0.1"];
+
+function getClientIP(request: Request, directIP: string): string {
+  const forwarded = request.headers.get("x-forwarded-for");
+
+  if (isTrustedProxy(directIP, TRUSTED_PROXIES) && forwarded) {
+    return forwarded.split(",")[0].trim();
+  }
+  return directIP;
+}
+```
+
+### セキュリティヘッダー
+
+```typescript
+const securityHeaders = {
+  "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
+  "X-Content-Type-Options": "nosniff",
+  "X-XSS-Protection": "1; mode=block",
+  "X-Frame-Options": "DENY",  // 埋め込みページ以外
+  "Referrer-Policy": "strict-origin-when-cross-origin",
+  "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+  "Content-Security-Policy": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'",
+};
+```
+
+### 個人情報保護
+
+```typescript
+// ログにはマスク済みデータのみ
+function maskEmail(email: string): string {
+  const [local, domain] = email.split("@");
+  return `${local[0]}***@${domain}`;
+}
+
+logger.info("Donation created", {
+  email: maskEmail(donor.email),  // u***@example.com
+  amount,
+});
+```
+
+### 監査ログ
+
+```sql
+CREATE TABLE audit_logs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  admin_id UUID REFERENCES admins(id),
+  action VARCHAR(100) NOT NULL,
+  target_type VARCHAR(50),
+  target_id VARCHAR(100),
+  old_value JSONB,
+  new_value JSONB,
+  ip_address VARCHAR(45),
+  user_agent TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX idx_audit_logs_admin_id ON audit_logs(admin_id);
+CREATE INDEX idx_audit_logs_created_at ON audit_logs(created_at DESC);
+```
+
+### 初期パスワード強制変更
+
+```typescript
+// 初回ログイン時
+if (admin.must_change_password) {
+  return Response.json({
+    requirePasswordChange: true,
+    tempToken: generateTempToken(admin.id),
+  });
+}
+```
 
 ## デプロイ
 

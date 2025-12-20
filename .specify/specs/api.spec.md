@@ -13,12 +13,50 @@ https://donate.example.com/api
 ## 認証
 
 ### 管理API
-```
+```http
 Authorization: Bearer <session_token>
+X-CSRF-Token: <csrf_token>
+Cookie: session=<session_cookie>; HttpOnly; Secure; SameSite=Strict
 ```
 
 ### 公開API
 認証不要（寄付作成、イベント取得など）
+ただしRate Limiting適用
+
+---
+
+## セキュリティ共通仕様
+
+### Rate Limiting
+
+全エンドポイントにレート制限を適用。超過時は `429 Too Many Requests` を返す。
+
+```http
+HTTP/1.1 429 Too Many Requests
+Retry-After: 60
+X-RateLimit-Limit: 10
+X-RateLimit-Remaining: 0
+X-RateLimit-Reset: 1703145600
+```
+
+| エンドポイント | Window | Max |
+|---------------|--------|-----|
+| POST /api/auth/login | 15分 | 5回 |
+| POST /api/donations | 1分 | 10回 |
+| POST /api/subscriptions | 1分 | 5回 |
+| GET /api/events | 1分 | 60回 |
+| * /api/admin/* | 1分 | 120回 |
+
+### 二重リクエスト防止 (Idempotency)
+
+決済系エンドポイントには `Idempotency-Key` ヘッダーを推奨:
+
+```http
+POST /api/donations
+Idempotency-Key: donation_550e8400-e29b-41d4-a716-446655440000
+```
+
+同じキーで2回目以降のリクエストは、最初のレスポンスを返す（再処理しない）。
 
 ---
 
@@ -242,6 +280,7 @@ Content-Type: application/json
 ```json
 {
   "token": "session_token_here",
+  "csrfToken": "csrf_token_here",
   "expiresAt": "2025-12-21T10:00:00Z",
   "user": {
     "id": "usr_001",
@@ -251,11 +290,57 @@ Content-Type: application/json
 }
 ```
 
+**Response: 200 OK（パスワード変更必須）**
+```json
+{
+  "requirePasswordChange": true,
+  "tempToken": "temp_token_for_password_change"
+}
+```
+
 **Response: 403 Forbidden**（IP制限）
 ```json
 {
   "error": "IP_NOT_ALLOWED",
   "message": "このIPアドレスからのアクセスは許可されていません"
+}
+```
+
+**Response: 429 Too Many Requests**（Rate Limit超過）
+```json
+{
+  "error": "RATE_LIMIT_EXCEEDED",
+  "message": "ログイン試行回数が上限を超えました。15分後に再試行してください",
+  "retryAfter": 900
+}
+```
+
+#### パスワード変更（初回ログイン時）
+```http
+POST /api/auth/change-password
+Content-Type: application/json
+
+{
+  "tempToken": "temp_token_for_password_change",
+  "newPassword": "new_secure_password"
+}
+```
+
+**パスワード要件:**
+- 最小12文字
+- 大文字・小文字・数字を含む
+- 一般的なパスワードリストに含まれない
+
+#### パスワード変更（通常）
+```http
+POST /api/auth/change-password
+Authorization: Bearer <token>
+X-CSRF-Token: <csrf_token>
+Content-Type: application/json
+
+{
+  "currentPassword": "current_password",
+  "newPassword": "new_secure_password"
 }
 ```
 
@@ -380,7 +465,33 @@ Stripe-Signature: <signature>
 | NOT_FOUND | 404 | リソースなし |
 | REFUND_PERIOD_EXPIRED | 400 | 返金期限超過 |
 | IP_NOT_ALLOWED | 403 | IP制限 |
+| RATE_LIMIT_EXCEEDED | 429 | レート制限超過 |
+| CSRF_TOKEN_MISMATCH | 403 | CSRFトークン不一致 |
+| PASSWORD_TOO_WEAK | 400 | パスワード要件不足 |
+| DUPLICATE_REQUEST | 409 | 重複リクエスト（Idempotency） |
+| WEBHOOK_SIGNATURE_INVALID | 400 | Webhook署名不正 |
 | STRIPE_ERROR | 500 | Stripe API エラー |
+| INTERNAL_ERROR | 500 | 内部エラー（詳細非公開） |
+
+### 本番環境でのエラー詳細
+
+本番環境では内部エラーの詳細は返さない:
+
+```json
+// 開発環境
+{
+  "error": "INTERNAL_ERROR",
+  "message": "Database connection failed",
+  "stack": "Error: Database connection failed\n    at ..."
+}
+
+// 本番環境
+{
+  "error": "INTERNAL_ERROR",
+  "message": "An error occurred. Please try again later.",
+  "requestId": "req_abc123"  // サポート問い合わせ用
+}
+```
 
 ---
 
