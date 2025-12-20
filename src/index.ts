@@ -189,6 +189,18 @@ async function handleRequest(request: Request, server: any): Promise<Response> {
       return addRequestId(response);
     }
 
+    // Static files - Demo pages
+    else if (path.startsWith("/demo") && method === "GET") {
+      const filePath = `./public${path}`;
+      const file = Bun.file(filePath);
+      if (await file.exists()) {
+        response = new Response(file);
+      } else {
+        // Default to embed demo
+        response = new Response(Bun.file("./public/demo/embed.html"));
+      }
+    }
+
     // Static files - Admin panel
     else if (path.startsWith("/admin") && method === "GET") {
       const filePath = path === "/admin" || path === "/admin/"

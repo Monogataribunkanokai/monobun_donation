@@ -407,6 +407,48 @@ tr:hover {
   margin-top: 1rem;
 }
 
+/* Progress Bar Mini (for events table) */
+.progress-bar-mini {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 100px;
+}
+
+.progress-bar-mini .progress-fill {
+  flex: 1;
+  height: 8px;
+  background: #e0e0e0;
+  border-radius: 4px;
+  overflow: hidden;
+  position: relative;
+}
+
+.progress-bar-mini .progress-fill::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 4px;
+}
+
+.progress-bar-mini span {
+  font-size: 0.8rem;
+  color: #666;
+  white-space: nowrap;
+}
+
+/* Status - Refunded */
+.status-refunded {
+  color: #805ad5;
+}
+
+.status-ended {
+  color: #718096;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .header {

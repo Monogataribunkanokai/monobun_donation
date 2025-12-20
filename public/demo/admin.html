@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>管理画面デモ - Donation Admin</title>
+  <link rel="stylesheet" href="/admin/styles.css" />
+  <style>
+    .demo-banner {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 12px 20px;
+      text-align: center;
+      font-weight: bold;
+      position: sticky;
+      top: 0;
+      z-index: 1000;
+    }
+    .demo-banner a {
+      color: #ffd700;
+      margin-left: 16px;
+    }
+  </style>
+</head>
+<body>
+  <div class="demo-banner">
+    これはデモ画面です。データは全てモックデータです。
+    <a href="/">寄付ページへ</a>
+    <a href="/demo/embed.html">埋め込みデモ</a>
+  </div>
+  <div id="root"></div>
+  <script type="module" src="./admin-demo.tsx"></script>
+</body>
+</html>

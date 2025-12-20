@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>埋め込みウィジェットデモ - Donation Widget</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+      min-height: 100vh;
+    }
+
+    .demo-header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 16px 24px;
+      text-align: center;
+    }
+
+    .demo-header h1 {
+      font-size: 24px;
+      margin-bottom: 8px;
+    }
+
+    .demo-header p {
+      opacity: 0.9;
+      font-size: 14px;
+    }
+
+    .demo-header nav {
+      margin-top: 16px;
+    }
+
+    .demo-header nav a {
+      color: #ffd700;
+      margin: 0 12px;
+      text-decoration: none;
+    }
+
+    .demo-header nav a:hover {
+      text-decoration: underline;
+    }
+
+    /* Simulated External Website */
+    .external-site {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 40px 20px;
+    }
+
+    .site-header {
+      background: white;
+      padding: 20px;
+      border-radius: 12px;
+      margin-bottom: 30px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+
+    .site-header h2 {
+      color: #333;
+      font-size: 28px;
+    }
+
+    .site-header p {
+      color: #666;
+      margin-top: 8px;
+    }
+
+    .content-grid {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 30px;
+    }
+
+    @media (max-width: 768px) {
+      .content-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .main-content {
+      background: white;
+      padding: 30px;
+      border-radius: 12px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+
+    .main-content h3 {
+      color: #333;
+      margin-bottom: 16px;
+    }
+
+    .main-content p {
+      color: #555;
+      line-height: 1.8;
+      margin-bottom: 16px;
+    }
+
+    .sidebar {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    /* Donation Widget Embed */
+    .donation-widget {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+      overflow: hidden;
+    }
+
+    .widget-header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 20px;
+      text-align: center;
+    }
+
+    .widget-header h4 {
+      font-size: 20px;
+      margin-bottom: 4px;
+    }
+
+    .widget-header p {
+      opacity: 0.9;
+      font-size: 14px;
+    }
+
+    .widget-body {
+      padding: 24px;
+    }
+
+    .widget-progress {
+      margin-bottom: 20px;
+    }
+
+    .progress-stats {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 8px;
+      font-size: 14px;
+    }
+
+    .progress-amount {
+      font-weight: bold;
+      color: #667eea;
+    }
+
+    .progress-goal {
+      color: #888;
+    }
+
+    .progress-bar {
+      height: 12px;
+      background: #e0e0e0;
+      border-radius: 6px;
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      border-radius: 6px;
+      transition: width 0.5s ease;
+    }
+
+    .progress-percent {
+      text-align: center;
+      font-size: 12px;
+      color: #888;
+      margin-top: 8px;
+    }
+
+    .amount-buttons {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+
+    .amount-btn {
+      padding: 12px;
+      border: 2px solid #667eea;
+      background: white;
+      color: #667eea;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: bold;
+      transition: all 0.2s;
+    }
+
+    .amount-btn:hover {
+      background: #f0f3ff;
+    }
+
+    .amount-btn.selected {
+      background: #667eea;
+      color: white;
+    }
+
+    .custom-amount {
+      margin-bottom: 20px;
+    }
+
+    .custom-amount label {
+      display: block;
+      font-size: 14px;
+      color: #666;
+      margin-bottom: 8px;
+    }
+
+    .input-wrapper {
+      display: flex;
+      align-items: center;
+      border: 2px solid #ddd;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    .input-wrapper span {
+      padding: 12px;
+      background: #f5f5f5;
+      color: #666;
+    }
+
+    .input-wrapper input {
+      flex: 1;
+      padding: 12px;
+      border: none;
+      font-size: 16px;
+      outline: none;
+    }
+
+    .donate-btn {
+      width: 100%;
+      padding: 16px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 18px;
+      font-weight: bold;
+      cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+    .donate-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+    }
+
+    .widget-footer {
+      text-align: center;
+      padding: 16px;
+      font-size: 12px;
+      color: #888;
+      border-top: 1px solid #eee;
+    }
+
+    .widget-footer a {
+      color: #667eea;
+    }
+
+    /* Compact Widget Style */
+    .widget-compact {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+      padding: 20px;
+    }
+
+    .widget-compact h4 {
+      font-size: 16px;
+      color: #333;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .widget-compact .quick-amounts {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .widget-compact .quick-btn {
+      flex: 1;
+      padding: 10px;
+      border: 1px solid #667eea;
+      background: white;
+      color: #667eea;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+
+    .widget-compact .quick-btn:hover {
+      background: #667eea;
+      color: white;
+    }
+
+    .widget-compact .donate-link {
+      display: block;
+      text-align: center;
+      padding: 12px;
+      background: #667eea;
+      color: white;
+      text-decoration: none;
+      border-radius: 6px;
+      font-weight: bold;
+    }
+
+    .widget-compact .donate-link:hover {
+      background: #5a6fd6;
+    }
+
+    /* Code Block */
+    .embed-code {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+      margin-top: 30px;
+    }
+
+    .embed-code h3 {
+      padding: 16px 20px;
+      border-bottom: 1px solid #eee;
+      color: #333;
+      font-size: 16px;
+    }
+
+    .code-block {
+      padding: 20px;
+      background: #1e1e1e;
+      color: #d4d4d4;
+      font-family: "Monaco", "Menlo", monospace;
+      font-size: 13px;
+      line-height: 1.6;
+      overflow-x: auto;
+      border-radius: 0 0 12px 12px;
+    }
+
+    .code-block .tag {
+      color: #569cd6;
+    }
+
+    .code-block .attr {
+      color: #9cdcfe;
+    }
+
+    .code-block .string {
+      color: #ce9178;
+    }
+
+    .code-block .comment {
+      color: #6a9955;
+    }
+  </style>
+</head>
+<body>
+  <div class="demo-header">
+    <h1>埋め込みウィジェット デモ</h1>
+    <p>外部サイトに寄付ウィジェットを埋め込んだ場合のイメージです</p>
+    <nav>
+      <a href="/">寄付ページへ</a>
+      <a href="/demo/admin.html">管理画面デモ</a>
+    </nav>
+  </div>
+
+  <div class="external-site">
+    <!-- Simulated External Website Header -->
+    <div class="site-header">
+      <h2>NPO法人 サンプル団体</h2>
+      <p>子どもたちの未来を支援する活動を行っています</p>
+    </div>
+
+    <div class="content-grid">
+      <!-- Main Content (Simulated) -->
+      <div class="main-content">
+        <h3>私たちの活動について</h3>
+        <p>
+          私たちは、恵まれない環境にある子どもたちに教育の機会を提供する活動を行っています。
+          2020年の設立以来、500人以上の子どもたちをサポートしてきました。
+        </p>
+        <p>
+          皆様からのご支援は、教材の購入、学習スペースの確保、指導者への謝礼など、
+          子どもたちの教育環境を整えるために活用されます。
+        </p>
+        <p>
+          毎月1,000円のご支援で、1人の子どもに1ヶ月分の教材を提供することができます。
+          どうぞ、子どもたちの未来のために、温かいご支援をお願いいたします。
+        </p>
+
+        <h3 style="margin-top: 30px;">最近の活動報告</h3>
+        <p>
+          2024年12月: 年末学習会を開催し、50名の子どもたちが参加しました。
+        </p>
+        <p>
+          2024年11月: 新しい学習センターを開設し、より多くの子どもたちを受け入れられるようになりました。
+        </p>
+      </div>
+
+      <!-- Sidebar with Donation Widgets -->
+      <div class="sidebar">
+        <!-- Full Donation Widget -->
+        <div class="donation-widget">
+          <div class="widget-header">
+            <h4>ご支援のお願い</h4>
+            <p>子どもたちの未来のために</p>
+          </div>
+          <div class="widget-body">
+            <div class="widget-progress">
+              <div class="progress-stats">
+                <span class="progress-amount">780,000</span>
+                <span class="progress-goal">/ 2,000,000</span>
+              </div>
+              <div class="progress-bar">
+                <div class="progress-fill" style="width: 39%"></div>
+              </div>
+              <div class="progress-percent">39% 達成</div>
+            </div>
+
+            <div class="amount-buttons" id="amount-buttons">
+              <button class="amount-btn" data-amount="500">500</button>
+              <button class="amount-btn" data-amount="1000">1,000</button>
+              <button class="amount-btn selected" data-amount="3000">3,000</button>
+              <button class="amount-btn" data-amount="5000">5,000</button>
+              <button class="amount-btn" data-amount="10000">10,000</button>
+              <button class="amount-btn" data-amount="30000">30,000</button>
+            </div>
+
+            <div class="custom-amount">
+              <label>その他の金額</label>
+              <div class="input-wrapper">
+                <span></span>
+                <input type="number" id="custom-amount" placeholder="金額を入力" min="100" />
+              </div>
+            </div>
+
+            <button class="donate-btn" onclick="handleDonate()">寄付する</button>
+          </div>
+          <div class="widget-footer">
+            Powered by <a href="#">Donation System</a>
+          </div>
+        </div>
+
+        <!-- Compact Widget -->
+        <div class="widget-compact">
+          <h4>クイック寄付</h4>
+          <div class="quick-amounts">
+            <button class="quick-btn" onclick="quickDonate(500)">500</button>
+            <button class="quick-btn" onclick="quickDonate(1000)">1,000</button>
+            <button class="quick-btn" onclick="quickDonate(3000)">3,000</button>
+          </div>
+          <a href="/donate" class="donate-link">寄付ページへ</a>
+        </div>
+      </div>
+    </div>
+
+    <!-- Embed Code Example -->
+    <div class="embed-code">
+      <h3>埋め込みコード例</h3>
+      <pre class="code-block"><span class="comment">&lt;!-- 寄付ウィジェットの埋め込み --&gt;</span>
+<span class="tag">&lt;iframe</span>
+  <span class="attr">src</span>=<span class="string">"https://your-domain.com/widget?event=evt_abc123"</span>
+  <span class="attr">width</span>=<span class="string">"350"</span>
+  <span class="attr">height</span>=<span class="string">"500"</span>
+  <span class="attr">frameborder</span>=<span class="string">"0"</span>
+  <span class="attr">allowtransparency</span>=<span class="string">"true"</span>
+<span class="tag">&gt;&lt;/iframe&gt;</span>
+
+<span class="comment">&lt;!-- または JavaScript SDK --&gt;</span>
+<span class="tag">&lt;script</span> <span class="attr">src</span>=<span class="string">"https://your-domain.com/sdk.js"</span><span class="tag">&gt;&lt;/script&gt;</span>
+<span class="tag">&lt;script&gt;</span>
+  DonationWidget.init({
+    containerId: 'donation-widget',
+    eventId: 'evt_abc123',
+    theme: 'light',
+    amounts: [500, 1000, 3000, 5000, 10000]
+  });
+<span class="tag">&lt;/script&gt;</span>
+</pre>
+    </div>
+  </div>
+
+  <script>
+    let selectedAmount = 3000;
+
+    // Amount button selection
+    document.querySelectorAll('.amount-btn').forEach(btn => {
+      btn.addEventListener('click', function() {
+        document.querySelectorAll('.amount-btn').forEach(b => b.classList.remove('selected'));
+        this.classList.add('selected');
+        selectedAmount = parseInt(this.dataset.amount);
+        document.getElementById('custom-amount').value = '';
+      });
+    });
+
+    // Custom amount input
+    document.getElementById('custom-amount').addEventListener('input', function() {
+      if (this.value) {
+        document.querySelectorAll('.amount-btn').forEach(b => b.classList.remove('selected'));
+        selectedAmount = parseInt(this.value) || 0;
+      }
+    });
+
+    // Donate button
+    function handleDonate() {
+      const customAmount = document.getElementById('custom-amount').value;
+      const amount = customAmount ? parseInt(customAmount) : selectedAmount;
+
+      if (amount < 100) {
+        alert('寄付額は100円以上にしてください');
+        return;
+      }
+
+      alert(`デモ: ¥${amount.toLocaleString()} の寄付処理をシミュレートしました\n\n実際の実装では、ここでStripe Checkoutへリダイレクトします。`);
+    }
+
+    // Quick donate
+    function quickDonate(amount) {
+      alert(`デモ: ¥${amount.toLocaleString()} のクイック寄付をシミュレートしました`);
+    }
+  </script>
+</body>
+</html>
