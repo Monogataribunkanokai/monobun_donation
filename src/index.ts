@@ -16,6 +16,17 @@ import {
   handleForgotPassword,
   handleResetPassword,
 } from "./routes/api/auth";
+import {
+  handleCreateDonation,
+  handleGetDonation,
+} from "./routes/api/donations";
+import {
+  handleCreateSubscription,
+  handleGetSubscription,
+  handleCancelSubscription,
+} from "./routes/api/subscriptions";
+import { handleStripeWebhook } from "./routes/api/webhooks";
+import { handleListEvents, handleGetEvent } from "./routes/api/events";
 
 const PORT = parseInt(process.env.PORT || "3000", 10);
 const IS_PRODUCTION = process.env.NODE_ENV === "production";
@@ -138,46 +149,42 @@ async function handleRequest(request: Request, server: any): Promise<Response> {
       }
     }
 
-    // Public API routes
+    // Public API routes - Events
     else if (path === "/api/events" && method === "GET") {
-      // TODO: Implement public events listing
-      response = Response.json(
-        { error: "NOT_IMPLEMENTED", message: "This endpoint is not yet implemented" },
-        { status: 501 }
-      );
-    } else if (path.startsWith("/api/events/") && method === "GET") {
-      // TODO: Implement event details
-      response = Response.json(
-        { error: "NOT_IMPLEMENTED", message: "This endpoint is not yet implemented" },
-        { status: 501 }
-      );
-    } else if (path === "/api/donations" && method === "POST") {
-      // TODO: Implement donation creation
-      response = Response.json(
-        { error: "NOT_IMPLEMENTED", message: "This endpoint is not yet implemented" },
-        { status: 501 }
-      );
-    } else if (path === "/api/subscriptions" && method === "POST") {
-      // TODO: Implement subscription creation
-      response = Response.json(
-        { error: "NOT_IMPLEMENTED", message: "This endpoint is not yet implemented" },
-        { status: 501 }
-      );
-    } else if (path.startsWith("/api/subscriptions/") && path.endsWith("/cancel") && method === "POST") {
-      // TODO: Implement subscription cancellation
-      response = Response.json(
-        { error: "NOT_IMPLEMENTED", message: "This endpoint is not yet implemented" },
-        { status: 501 }
-      );
+      response = await handleListEvents({ request, directIp });
+    } else if (path.match(/^\/api\/events\/[^/]+$/) && method === "GET") {
+      const eventId = path.split("/")[3];
+      response = await handleGetEvent({ request, directIp }, eventId);
     }
 
-    // Webhook routes
+    // Public API routes - Donations
+    else if (path === "/api/donations" && method === "POST") {
+      response = await handleCreateDonation({ request, directIp });
+    } else if (path.match(/^\/api\/donations\/[^/]+$/) && method === "GET") {
+      const donationId = path.split("/")[3];
+      response = await handleGetDonation({ request, directIp }, donationId);
+    }
+
+    // Public API routes - Subscriptions
+    else if (path === "/api/subscriptions" && method === "POST") {
+      response = await handleCreateSubscription({ request, directIp });
+    } else if (path.match(/^\/api\/subscriptions\/[^/]+$/) && method === "GET") {
+      const subscriptionId = path.split("/")[3];
+      response = await handleGetSubscription({ request, directIp }, subscriptionId);
+    } else if (path.match(/^\/api\/subscriptions\/[^/]+\/cancel$/) && method === "POST") {
+      response = await handleCancelSubscription({ request, directIp });
+    }
+
+    // Webhook routes (no rate limiting, no security headers modification)
     else if (path === "/api/webhooks/stripe" && method === "POST") {
-      // TODO: Implement Stripe webhook
-      response = Response.json(
-        { error: "NOT_IMPLEMENTED", message: "This endpoint is not yet implemented" },
-        { status: 501 }
-      );
+      response = await handleStripeWebhook({ request, directIp });
+      // Skip security headers for webhook responses
+      const durationMs = Date.now() - startTime;
+      logger.request(method, path, response.status, durationMs, {
+        ip: clientIp,
+        requestId,
+      });
+      return addRequestId(response);
     }
 
     // 404 for unknown routes
