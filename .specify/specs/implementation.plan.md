@@ -365,6 +365,44 @@ APP_URL=https://donate.example.com
 SESSION_SECRET=your-secret-key
 ADMIN_INITIAL_EMAIL=admin@example.com
 ADMIN_INITIAL_PASSWORD=initial-password
+
+# Security
+TRUSTED_PROXIES=10.0.0.0/8,172.16.0.0/12,127.0.0.1
+CAPTCHA_SITE_KEY=xxxxx  # hCaptcha or reCAPTCHA
+CAPTCHA_SECRET_KEY=xxxxx
+```
+
+---
+
+## メール認証設定（運用必須）
+
+フィッシング・なりすまし対策のため、DNSに以下を設定:
+
+### SPF (Sender Policy Framework)
+```
+example.com.  TXT  "v=spf1 include:_spf.resend.com ~all"
+```
+
+### DKIM (DomainKeys Identified Mail)
+Resend管理画面から取得したDKIMレコードを設定
+
+### DMARC (Domain-based Message Authentication)
+```
+_dmarc.example.com.  TXT  "v=DMARC1; p=reject; rua=mailto:dmarc@example.com"
+```
+
+### メール内容のセキュリティ
+```typescript
+// メールに含めてはいけないもの
+// ❌ パスワード変更リンク（リセットリンク以外）
+// ❌ ログインリンク
+// ❌ 送金依頼
+// ❌ 個人情報の詳細
+
+// メールに含めるべきもの
+// ✅ 正規ドメインの明示
+// ✅ 不審なアクティビティの報告先
+// ✅ 寄付の確認情報のみ
 ```
 
 ---
@@ -373,32 +411,60 @@ ADMIN_INITIAL_PASSWORD=initial-password
 
 | Risk | Severity | Mitigation |
 |------|----------|-----------|
-| ブルートフォース攻撃 | High | Rate Limiting (15分に5回)、アカウントロックアウト |
+| ブルートフォース攻撃 | High | Rate Limiting + アカウントロックアウト + CAPTCHA |
+| 分散ブルートフォース | High | グローバルログイン遅延 + CAPTCHA |
 | パスワード漏洩 | High | Argon2id（メモリ64MB、3イテレーション）|
-| セッションハイジャック | High | HTTPOnly + Secure + SameSite Cookie、IP検証 |
+| セッションハイジャック | High | HTTPOnly + Secure + SameSite Cookie + IP検証 |
+| セッション固定攻撃 | High | ログイン時に既存セッション破棄 + 新規発行 |
 | CSRF攻撃 | High | SameSite=Strict + CSRFトークン |
 | 二重決済 | High | Stripe Idempotency Key + DB制約 |
 | Webhook偽造 | High | Stripe署名検証必須 + イベントID重複チェック |
 | SQLインジェクション | High | Bun.sqlパラメータ化クエリ + Zodバリデーション |
+| メールなりすまし | High | SPF + DKIM + DMARC設定必須 |
+| フィッシング | High | 正規ドメイン明示 + メールに危険リンク含めない |
 | XSS | Medium | HTMLエスケープ + CSP設定 |
 | IP制限バイパス | Medium | 信頼できるプロキシのみX-Forwarded-For許可 |
+| IPアドレス変更 | Medium | セッション中IP変更で再認証要求 |
 | 情報漏洩 | Medium | ログマスキング、本番でスタックトレース非公開 |
-| DoS攻撃 | Medium | 全エンドポイントRate Limiting |
+| DoS攻撃 | Medium | 全エンドポイントRate Limiting + CDN/WAF |
 | クリックジャッキング | Low | X-Frame-Options + CSP frame-ancestors |
 
 ## Security Checklist
 
 実装完了時に確認するチェックリスト:
 
+### 認証・セッション
 - [ ] 全てのパスワードがArgon2idでハッシュ化されている
-- [ ] セッショントークンが暗号論的に安全に生成されている
+- [ ] セッショントークンが暗号論的に安全に生成されている（32バイト以上）
+- [ ] ログイン時に既存セッションを破棄し新規発行している
+- [ ] セッション中のIPアドレス変更を検知している
+- [ ] 初期パスワード変更が強制されている
+- [ ] パスワードリセット機能が安全に実装されている
+- [ ] アカウントロックアウトが実装されている（5回失敗で30分）
+- [ ] CAPTCHA（3回失敗後）が実装されている
+
+### CSRF・Rate Limiting
 - [ ] CSRFトークンが全ての状態変更リクエストで検証されている
 - [ ] Rate Limitingが全エンドポイントに適用されている
+- [ ] 分散攻撃対策（グローバル遅延）が実装されている
+
+### 決済
 - [ ] Stripe Webhookの署名検証が実装されている
+- [ ] Webhook イベントIDの重複チェックが実装されている
 - [ ] Idempotency Keyが決済リクエストで使用されている
+
+### 入力・出力
 - [ ] 全ての入力がZodでバリデーションされている
 - [ ] セキュリティヘッダーが設定されている
-- [ ] 監査ログが管理操作に記録されている
-- [ ] ログにセンシティブ情報が含まれていない
 - [ ] 本番環境でエラー詳細が非公開になっている
-- [ ] 初期パスワード変更が強制されている
+
+### ログ・監査
+- [ ] 監査ログが管理操作に記録されている
+- [ ] ログにセンシティブ情報が含まれていない（メールマスキング）
+- [ ] セッショントークンがログに出力されていない
+
+### 運用
+- [ ] SPF/DKIM/DMARCがDNSに設定されている
+- [ ] メールに危険なリンクが含まれていない
+- [ ] 正規ドメインがメールに明示されている
+- [ ] CDN/WAFの導入を検討済み

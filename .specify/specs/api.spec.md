@@ -42,10 +42,57 @@ X-RateLimit-Reset: 1703145600
 | エンドポイント | Window | Max |
 |---------------|--------|-----|
 | POST /api/auth/login | 15分 | 5回 |
+| POST /api/auth/forgot-password | 1時間 | 3回 |
 | POST /api/donations | 1分 | 10回 |
 | POST /api/subscriptions | 1分 | 5回 |
 | GET /api/events | 1分 | 60回 |
 | * /api/admin/* | 1分 | 120回 |
+
+### 分散攻撃対策
+
+大量のログイン失敗が検知された場合、システム全体で遅延を導入:
+
+```typescript
+// グローバルログイン失敗カウント
+if (globalFailedLoginsPerMinute > 100) {
+  await sleep(5000); // 全ログインに5秒遅延
+}
+
+// アカウントロックアウト
+if (admin.failed_login_attempts >= 5) {
+  admin.locked_until = now() + 30分;
+}
+
+// CAPTCHA要求（3回失敗後）
+if (admin.failed_login_attempts >= 3) {
+  return { requireCaptcha: true };
+}
+```
+
+### セッション固定攻撃対策
+
+ログイン成功時に既存セッションを破棄し、新規セッションを発行:
+
+```typescript
+// 既存セッションを全て無効化
+await db.query("DELETE FROM sessions WHERE admin_id = $1", [admin.id]);
+
+// 新規セッション発行
+const newSession = await createSession(admin.id, request);
+```
+
+### IPアドレス変更検知
+
+セッション中にIPアドレスが変更された場合、再認証を要求:
+
+```typescript
+if (session.ip_address !== currentIP) {
+  return Response.json({
+    error: "SESSION_IP_CHANGED",
+    message: "IPアドレスが変更されました。再ログインしてください"
+  }, { status: 401 });
+}
+```
 
 ### 二重リクエスト防止 (Idempotency)
 
@@ -344,11 +391,74 @@ Content-Type: application/json
 }
 ```
 
+#### パスワードリセット要求
+```http
+POST /api/auth/forgot-password
+Content-Type: application/json
+
+{
+  "email": "admin@example.com"
+}
+```
+
+**Response: 200 OK**（メール存在有無に関わらず同じレスポンス）
+```json
+{
+  "message": "パスワードリセットメールを送信しました（登録済みの場合）"
+}
+```
+
+**セキュリティ仕様:**
+- メールアドレスの存在有無を漏らさない
+- Rate Limit: 1時間に3回まで
+- リセットトークンは1時間で期限切れ
+- リセットトークンは1回使用で無効化
+
+#### パスワードリセット実行
+```http
+POST /api/auth/reset-password
+Content-Type: application/json
+
+{
+  "token": "reset_token_from_email",
+  "newPassword": "new_secure_password"
+}
+```
+
+**Response: 200 OK**
+```json
+{
+  "message": "パスワードを変更しました。全てのセッションがログアウトされました。"
+}
+```
+
+**Response: 400 Bad Request**
+```json
+{
+  "error": "RESET_TOKEN_EXPIRED",
+  "message": "リセットリンクの有効期限が切れています"
+}
+```
+
+**セキュリティ仕様:**
+- リセット完了後、全セッションを無効化
+- 異なるIPからのリセットはメールで通知
+- must_change_password = false に設定
+
 #### ログアウト
 ```http
 POST /api/auth/logout
 Authorization: Bearer <token>
 ```
+
+#### 全デバイスからログアウト
+```http
+POST /api/auth/logout-all
+Authorization: Bearer <token>
+X-CSRF-Token: <csrf_token>
+```
+
+全てのセッションを無効化（アカウント侵害時に使用）
 
 #### 現在のユーザー
 ```http
