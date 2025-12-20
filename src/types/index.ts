@@ -4,7 +4,7 @@
 
 export type DonationType = "one-time" | "monthly" | "yearly" | "event";
 export type PaymentMethod = "card" | "paypay" | "bank_transfer";
-export type AdminRole = "viewer" | "editor";
+export type AdminRole = "viewer" | "editor" | "super_admin";
 export type DonationStatus = "pending" | "completed" | "failed" | "disputed" | "refunded" | "partially_refunded";
 export type SubscriptionStatus = "pending" | "active" | "cancelled" | "past_due";
 export type EventStatus = "draft" | "active" | "ended";

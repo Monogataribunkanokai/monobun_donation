@@ -198,6 +198,13 @@ export async function login(
   const admin = await findAdminByEmail(email);
 
   if (!admin) {
+    // Timing attack prevention: perform dummy password verification
+    // This ensures consistent response time regardless of email existence
+    await Bun.password.hash("dummy_password_for_timing", {
+      algorithm: "argon2id",
+      memoryCost: 65536,
+      timeCost: 3,
+    });
     await incrementGlobalLoginFailure();
     return { success: false, reason: "Invalid credentials" };
   }

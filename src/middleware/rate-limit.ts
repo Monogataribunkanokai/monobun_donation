@@ -4,6 +4,9 @@ import { incrementRateLimit } from "../lib/db";
 import { logger } from "../lib/logger";
 import type { RateLimitConfig, RateLimitResult } from "../types";
 
+// Use DB-based rate limiting in production for distributed deployments
+const USE_DB_RATE_LIMIT = process.env.NODE_ENV === "production" || process.env.USE_DB_RATE_LIMIT === "true";
+
 // === Rate Limit Configuration ===
 
 const RATE_LIMITS: Record<string, RateLimitConfig> = {
@@ -175,7 +178,7 @@ async function checkDbRateLimit(
 export async function rateLimit(
   request: Request,
   clientIp: string,
-  useDb: boolean = false
+  useDb: boolean = USE_DB_RATE_LIMIT
 ): Promise<{ allowed: boolean; response?: Response; headers: Record<string, string> }> {
   const url = new URL(request.url);
   const method = request.method.toUpperCase();
@@ -240,5 +243,7 @@ export function cleanupMemoryCache(): void {
   }
 }
 
-// Run cleanup every 5 minutes
-setInterval(cleanupMemoryCache, 5 * 60 * 1000);
+// Run cleanup every 5 minutes (skip in test environment)
+if (process.env.NODE_ENV !== "test") {
+  setInterval(cleanupMemoryCache, 5 * 60 * 1000);
+}

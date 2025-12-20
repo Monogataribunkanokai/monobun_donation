@@ -111,6 +111,7 @@ export function requireRole(
   const roleHierarchy: Record<AdminRole, number> = {
     viewer: 1,
     editor: 2,
+    super_admin: 3,
   };
 
   if (roleHierarchy[admin.role] < roleHierarchy[requiredRole]) {
@@ -133,6 +134,7 @@ export function hasRole(admin: Admin, requiredRole: AdminRole): boolean {
   const roleHierarchy: Record<AdminRole, number> = {
     viewer: 1,
     editor: 2,
+    super_admin: 3,
   };
   return roleHierarchy[admin.role] >= roleHierarchy[requiredRole];
 }

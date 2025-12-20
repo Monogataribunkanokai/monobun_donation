@@ -39,25 +39,65 @@ function createSchema<T>(
 
 // === Common Validators ===
 
-// Common passwords list
-const COMMON_PASSWORDS = [
-  "password123",
-  "123456789012",
-  "qwertyuiopas",
-  "letmein12345",
-  "welcome12345",
-  "admin1234567",
-  "iloveyou1234",
-  "sunshine1234",
-  "princess1234",
-  "football1234",
-];
+// Common passwords list (expanded for better security)
+// Based on common leaked passwords, adjusted for 12+ character requirement
+const COMMON_PASSWORDS = new Set([
+  // Classic patterns
+  "password1234", "password12345", "password123456",
+  "123456789012", "1234567890123", "12345678901234",
+  "qwertyuiopas", "qwertyuiop12", "qwerty123456",
+  "abcdefghijkl", "abcdef123456", "abc123456789",
+  // Common words + numbers
+  "letmein12345", "welcome12345", "admin1234567",
+  "iloveyou1234", "sunshine1234", "princess1234",
+  "football1234", "baseball1234", "basketball12",
+  "monkey123456", "dragon123456", "master123456",
+  "michael12345", "jennifer1234", "jordan123456",
+  "shadow123456", "ashley123456", "trustno12345",
+  "passw0rd1234", "p@ssword1234", "p@ssw0rd1234",
+  // Japanese common patterns
+  "sakura123456", "hinata123456", "naruto123456",
+  "tokyo1234567", "osaka1234567", "japan1234567",
+  // Keyboard patterns
+  "1qaz2wsx3edc", "zaq12wsx3edc", "qazwsxedcrfv",
+  "1q2w3e4r5t6y", "zxcvbnm12345", "asdfghjkl123",
+  // Repeated patterns
+  "aaaaaaaaaaaa", "111111111111", "123123123123",
+  "abcabcabcabc", "qweqweqweqwe", "asdasdasdasd",
+  // Seasonal/temporal
+  "summer123456", "winter123456", "spring123456",
+  "january12345", "december1234", "newyear12345",
+  // Common phrases
+  "letmein123456", "changeme12345", "welcome123456",
+  "password!1234", "mypassword123", "thepassword1",
+  "secret123456", "private12345", "access123456",
+  // Company/service patterns
+  "google123456", "amazon123456", "facebook1234",
+  "twitter12345", "instagram123", "microsoft123",
+  // Tech patterns
+  "computer1234", "internet1234", "network12345",
+  "database1234", "server123456", "admin@123456",
+  // Family/relationship
+  "family123456", "mother123456", "father123456",
+  "brother12345", "sister123456", "friend123456",
+  // Simple sequences
+  "abcdefgh1234", "a1b2c3d4e5f6", "1a2b3c4d5e6f",
+  "aabbccdd1234", "aaaa11112222", "test12345678",
+]);
+
+// RFC 5322 compliant email regex (simplified but stricter)
+const EMAIL_REGEX = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$/;
 
 export const emailSchema = createSchema((value: unknown): string => {
   if (typeof value !== "string") throw new Error("Expected string");
   if (value.length > 255) throw new Error("Email must be at most 255 characters");
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) throw new Error("Invalid email");
-  return value;
+  if (value.length < 5) throw new Error("Email must be at least 5 characters");
+  if (!EMAIL_REGEX.test(value)) throw new Error("Invalid email format");
+  // Additional checks
+  const [local, domain] = value.split("@");
+  if (!local || local.length > 64) throw new Error("Invalid email local part");
+  if (!domain || domain.length > 253) throw new Error("Invalid email domain");
+  return value.toLowerCase(); // Normalize to lowercase
 });
 
 export const passwordSchema = createSchema((value: unknown): string => {
@@ -67,7 +107,7 @@ export const passwordSchema = createSchema((value: unknown): string => {
   if (!/[A-Z]/.test(value)) throw new Error("Password must contain uppercase, lowercase, and numbers");
   if (!/[a-z]/.test(value)) throw new Error("Password must contain uppercase, lowercase, and numbers");
   if (!/[0-9]/.test(value)) throw new Error("Password must contain uppercase, lowercase, and numbers");
-  if (COMMON_PASSWORDS.includes(value.toLowerCase())) throw new Error("Password is too common");
+  if (COMMON_PASSWORDS.has(value.toLowerCase())) throw new Error("Password is too common");
   return value;
 });
 

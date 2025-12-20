@@ -65,32 +65,35 @@ export async function updateAdmin(
   updates: Partial<Pick<Admin, "password_hash" | "must_change_password" | "failed_login_attempts" | "locked_until">>
 ): Promise<void> {
   const db = getDb();
-  const setClauses: string[] = [];
-  const values: unknown[] = [];
 
+  // Use individual parameterized queries to avoid db.unsafe()
+  // This is safer and prevents any potential SQL injection
   if (updates.password_hash !== undefined) {
-    values.push(updates.password_hash);
-    setClauses.push(`password_hash = $${values.length}`);
-  }
-  if (updates.must_change_password !== undefined) {
-    values.push(updates.must_change_password);
-    setClauses.push(`must_change_password = $${values.length}`);
-  }
-  if (updates.failed_login_attempts !== undefined) {
-    values.push(updates.failed_login_attempts);
-    setClauses.push(`failed_login_attempts = $${values.length}`);
-  }
-  if (updates.locked_until !== undefined) {
-    values.push(updates.locked_until);
-    setClauses.push(`locked_until = $${values.length}`);
+    await db`
+      UPDATE admins SET password_hash = ${updates.password_hash}, updated_at = NOW()
+      WHERE id = ${id}
+    `;
   }
 
-  if (setClauses.length > 0) {
-    values.push(id);
-    await db.unsafe(
-      `UPDATE admins SET ${setClauses.join(", ")}, updated_at = NOW() WHERE id = $${values.length}`,
-      values
-    );
+  if (updates.must_change_password !== undefined) {
+    await db`
+      UPDATE admins SET must_change_password = ${updates.must_change_password}, updated_at = NOW()
+      WHERE id = ${id}
+    `;
+  }
+
+  if (updates.failed_login_attempts !== undefined) {
+    await db`
+      UPDATE admins SET failed_login_attempts = ${updates.failed_login_attempts}, updated_at = NOW()
+      WHERE id = ${id}
+    `;
+  }
+
+  if (updates.locked_until !== undefined) {
+    await db`
+      UPDATE admins SET locked_until = ${updates.locked_until}, updated_at = NOW()
+      WHERE id = ${id}
+    `;
   }
 }
 
