@@ -3,9 +3,6 @@ name: Deploy Demo to GitHub Pages
 on:
   push:
     branches: [main, claude/*]
-    paths:
-      - 'public/demo/**'
-      - '.github/workflows/deploy-demo.yml'
   workflow_dispatch:
 
 permissions:
@@ -31,9 +28,6 @@ jobs:
         run: |
           mkdir -p _site
           cp -r public/demo/* _site/
-          # Copy admin styles for the demo
-          mkdir -p _site/admin
-          cp public/admin/styles.css _site/admin/
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
