@@ -1,34 +1,51 @@
 # Monobun Donation
 
-Default to using Bun instead of Node.js.
+Bun製セルフホスト型寄付システム。Stripe統合。
 
-## Spec-Driven Development
-
-This project uses spec-kit for usage-driven development. Use the following commands:
-
-- `/speckit.constitution` - View/update project principles
-- `/speckit.specify` - Create feature specifications
-- `/speckit.plan` - Create technical implementation plans
-- `/speckit.tasks` - Break down into actionable tasks
-- `/speckit.implement` - Execute implementation
-
-### Development Flow
-
-1. **Specify**: Define what to build with usage examples
-2. **Test**: Write tests first based on specifications
-3. **Implement**: Write minimum code to pass tests
-4. **Verify**: Run `bun test` to ensure all tests pass
-
-### Project Structure
+## Quick Reference
 
 ```
-.specify/
-  memory/constitution.md    # Project principles
-  templates/                 # Specification templates
-  specs/                     # Feature specifications
-.claude/commands/            # Slash commands for spec-kit
-src/                         # Source code
+Tech: Bun + PostgreSQL(Bun.sql) + Stripe | Auth: Argon2id+JWT
+API: /api/donations, /api/subscriptions, /api/admin/*
+Fee: 3.6%(card/paypay), +0.7%(subscription)
 ```
+
+詳細→ `.specify/QUICK_REF.md`
+
+## Skills (UI作成時に参照)
+
+| Skill | 用途 |
+|-------|------|
+| `.claude/skills/donation-form.md` | 寄付フォームUI |
+| `.claude/skills/accessibility.md` | アクセシビリティ |
+| `.claude/skills/trust-transparency.md` | 信頼性・透明性 |
+
+## Spec Commands
+
+| Command | 用途 |
+|---------|------|
+| `/speckit.constitution` | プロジェクト原則 |
+| `/speckit.specify` | 機能仕様作成 |
+| `/speckit.plan` | 技術計画 |
+| `/speckit.tasks` | タスク分解 |
+| `/speckit.implement` | 実装 |
+
+## Dev Flow
+
+1. Specify → 2. Test → 3. Implement → 4. `bun test`
+
+## Structure
+
+```
+.specify/QUICK_REF.md        # 圧縮リファレンス
+.specify/specs/              # 詳細仕様
+.claude/skills/              # UIスキル
+docs/DESIGN_PATTERNS.md      # デザインパターン詳細
+docs/DESIGN_PATTERNS_COMPACT.md  # 圧縮版
+src/                         # ソースコード
+```
+
+## Bun Rules
 
 
 - Use `bun <file>` instead of `node <file>` or `ts-node <file>`
