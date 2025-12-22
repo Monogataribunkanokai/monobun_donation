@@ -28,6 +28,7 @@ import {
 import { handleStripeWebhook } from "./routes/api/webhooks";
 import { handleListEvents, handleGetEvent } from "./routes/api/events";
 import { handleAdminRoute } from "./routes/api/admin";
+import { handleMyRoute } from "./routes/api/my/subscriptions";
 
 const PORT = parseInt(process.env.PORT || "3000", 10);
 const IS_PRODUCTION = process.env.NODE_ENV === "production";
@@ -187,6 +188,24 @@ async function handleRequest(request: Request, server: any): Promise<Response> {
         requestId,
       });
       return addRequestId(response);
+    }
+
+    // Self-service portal API routes
+    else if (path.startsWith("/api/my/")) {
+      response = await handleMyRoute({ request, directIp }, path, method);
+    }
+
+    // Static files - Self-service portal
+    else if (path.startsWith("/my") && method === "GET") {
+      const filePath = path === "/my" || path === "/my/" || path === "/my/subscriptions"
+        ? "./public/my/index.html"
+        : `./public${path}`;
+      const file = Bun.file(filePath);
+      if (await file.exists()) {
+        response = new Response(file);
+      } else {
+        response = new Response(Bun.file("./public/my/index.html"));
+      }
     }
 
     // Static files - Demo pages
